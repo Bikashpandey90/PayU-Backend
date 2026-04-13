@@ -1,10 +1,11 @@
+require("dotenv").config();
 const axios = require("axios");
 
 class KhaltiService {
   constructor() {
     this.baseURL = process.env.KHALTI_SERVICE_URL;
     this.checkOutURL = process.env.KHALTI_CHECKOUT_URL;
-    this.apiToken = process.env.KHALTI_SECRET_KEY;
+    this.apiToken = process.env.KHALTI_SERVICE_TOKEN;
   }
 
   async initiatePayment({ amount, purchase_order_id, purchase_order_name }) {
