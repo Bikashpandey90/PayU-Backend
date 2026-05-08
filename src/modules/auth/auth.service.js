@@ -34,7 +34,7 @@ class AuthService {
   createUser = async (data) => {
     try {
       const userObj = new UserModel(data);
-      return await userObj.save(); //insert or update
+      return await userObj.save(); 
     } catch (exception) {
       console.log("Create user", exception);
       throw exception;

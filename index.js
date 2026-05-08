@@ -2,7 +2,7 @@ const http = require("http");
 const app = require("./src/config/express.config");
 
 const httpServer = http.createServer(app);
-
+//  "192.168.0.100",
 const port = process.env.PORT || 9005;
 httpServer.listen(port, (err) => {
   if (!err) {

@@ -21,6 +21,7 @@ transactionRouter.post(
   allowRole(["admin", "user"]),
   transactionCtrl.loadWallet,
 );
+
 transactionRouter.get(
   "/list",
   checkLogin,
@@ -54,7 +55,12 @@ transactionRouter.post(
   transactionCtrl.getStatement,
 );
 
-transactionRouter.get("/get-anal", checkLogin, allowRole(["user", "admin"]),transactionCtrl.getSpendingAnalytics);
+transactionRouter.get(
+  "/get-anal",
+  checkLogin,
+  allowRole(["user", "admin"]),
+  transactionCtrl.getSpendingAnalytics,
+);
 
 transactionRouter.get("/bus-routes", transactionCtrl.getBusRoutes);
 transactionRouter.post("/buses", transactionCtrl.getBuses);

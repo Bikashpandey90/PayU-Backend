@@ -26,8 +26,10 @@ const UserSchema = new mongoose.Schema(
     },
     gender: {
       type: String,
-      enum: ["male", "female", "others"],
-      message: "{VALUE} is not supported",
+      enum: {
+        values: ["male", "female", "others"],
+        message: "{VALUE} is not supported",
+      },
     },
     image: String,
     phone: String,
@@ -42,8 +44,6 @@ const UserSchema = new mongoose.Schema(
     autoIndex: true,
   },
 );
-
-
 
 const UserModel = mongoose.model("User", UserSchema);
 

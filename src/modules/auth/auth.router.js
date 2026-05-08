@@ -12,6 +12,7 @@ const {
   loginDTO,
   activationDTO,
   updateProfileDTO,
+  resendDTO,
 } = require("./auth.validator");
 
 authRouter.post(
@@ -26,18 +27,19 @@ authRouter.post(
   bodyValidator(activationDTO),
   authCtrl.activateUser,
 );
-authRouter.post(
-  "/resend-otp",
-  bodyValidator(activationDTO),
-  authCtrl.resendOtp,
-);
+authRouter.post("/resend-otp", bodyValidator(resendDTO), authCtrl.resendOtp);
 
 authRouter.post("/login", bodyValidator(loginDTO), authCtrl.login);
 
 authRouter.get("/me", checkLogin, authCtrl.getLoggedInUser);
 authRouter.get("/refresh", checkRefreshToken, authCtrl.getRefreshToken);
 
-authRouter.get('/user/:id',checkLogin,allowRole(['admin','user']),authCtrl.findUser)
+authRouter.get(
+  "/user/:id",
+  checkLogin,
+  allowRole(["admin", "user"]),
+  authCtrl.findUser,
+);
 
 authRouter
   .route("/:id")

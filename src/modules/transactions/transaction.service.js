@@ -3,6 +3,7 @@ const transactionModel = require("./transaction.model");
 const ledgerSvc = require("../ledger/ledger.service");
 const emailSvc = require("../../services/mail.service");
 const accountSvc = require("../account/account.service");
+const authSvc = require("../auth/auth.service");
 
 class TransactionService {
   sendTransactionEmail = async (name, amount, email, to, id, toEmail) => {
@@ -290,6 +291,134 @@ class TransactionService {
     }
   };
 
+  serviceCheckLayer = async (req, service, maxAmount = 50000) => {
+    try {
+      const userId = req.authUser._id;
+      const { amount, idempotencyKey } = req.body;
+      if (!userId || !amount || !idempotencyKey || !service) {
+        throw {
+          status: 400,
+          message: "Required fields missing",
+        };
+      }
+
+      // validate amount
+      if (Number(amount) <= 0) {
+        throw {
+          status: 400,
+          message: "Invalid amount",
+        };
+      }
+
+      if (Number(amount) > maxAmount) {
+        throw {
+          status: 400,
+          message: `Maximum limit exceeded. Max: ${maxAmount}`,
+        };
+      }
+
+      // validate service
+      // if (allowedServices.length && !allowedServices.includes(service)) {
+      //   throw {
+      //     status: 400,
+      //     message: "Invalid service provider",
+      //   };
+      // }
+
+      const userAccount = await accountSvc.getSingleItemByFilter({
+        user: userId,
+      });
+
+      if (!userAccount) {
+        throw {
+          status: 404,
+          message: "User account not found",
+        };
+      }
+
+      if (userAccount.status !== "ACTIVE") {
+        throw {
+          status: 400,
+          message: "Account is not active",
+        };
+      }
+
+      // balance check
+      const balance = await userAccount.getBalance();
+
+      if (userAccount?.user?.role === "user" && balance < amount) {
+        throw {
+          status: 400,
+          message: "Insufficient balance",
+        };
+      }
+
+      // duplicate transaction check
+      const existing = await this.getSingleItemByFilter({
+        idempotencyKey,
+      });
+
+      if (existing) {
+        if (existing.status === "COMPLETED") {
+          throw {
+            status: 409,
+            message: "Transaction already completed",
+            detail: existing,
+          };
+        }
+
+        if (existing.status === "PENDING") {
+          throw {
+            status: 409,
+            message: "Transaction already processing",
+          };
+        }
+
+        if (existing.status === "PROCESSING") {
+          throw {
+            status: 409,
+            message: "Transaction processing",
+          };
+        }
+      }
+
+      // admin account
+      const admin = await authSvc.getSingleUserByFilter({
+        role: "admin",
+      });
+
+      if (!admin) {
+        throw {
+          status: 500,
+          message: "Internal Server Error.",
+          error_code: "ANF_DB_S_ERR",
+        };
+      }
+
+      const adminAccount = await accountSvc.getSingleItemByFilter({
+        user: admin._id,
+      });
+
+      if (!adminAccount) {
+        throw {
+          status: 500,
+          message: "Internal Server Error.",
+          error_code: "AANF_B_ERR",
+        };
+      }
+
+      return {
+        userAccount,
+        adminAccount,
+        amount: Number(amount),
+        idempotencyKey,
+      };
+    } catch (exception) {
+      console.log(exception);
+      throw exception;
+    }
+  };
+
   transaction = async ({
     from,
     to,
@@ -333,6 +462,16 @@ class TransactionService {
       );
 
       await session.commitTransaction();
+
+      if (
+        transaction?.code !== "IN_APP_TRANSACTION" &&
+        transaction?.code !== "ESEWA_LOAD"
+      ) {
+        delete transaction.to;
+      }
+      if (transaction?.code === "ESEWA_LOAD") {
+        delete transaction.from;
+      }
 
       return transaction;
     } catch (err) {
@@ -474,7 +613,23 @@ class TransactionService {
             path: "user",
             select: ["_id", "name", "email", "image"],
           },
-        });
+        })
+        .lean();
+
+      if (!response) {
+        return null;
+      }
+
+      if (
+        response?.code !== "IN_APP_TRANSACTION" &&
+        response?.code !== "ESEWA_LOAD"
+      ) {
+        delete response.to;
+      }
+      if (response?.code === "ESEWA_LOAD") {
+        delete response.from;
+      }
+
       return response;
     } catch (exception) {
       console.log(exception);

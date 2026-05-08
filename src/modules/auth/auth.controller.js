@@ -15,12 +15,7 @@ class AuthController {
       //name valid
       const user = await authSvc.createUser(data);
       await authSvc.sendActivationNotification(data.name, data.otp, data.email);
-      //email,password,confirmPassword,gender,role,phone,address
-      //validate
-      //db store
-      //notify
-      //Email notification
-      //client response
+
       res.json({
         data: user,
         message: "Register data",
@@ -100,7 +95,7 @@ class AuthController {
       user = await authSvc.resetOtp(user);
       await authSvc.sendActivationNotification(user.name, user.otp, user.email);
       res.json({
-        detail: { otp: user.otp },
+        detail: null,
         status: "OTP_RESEND",
         message: "OTP resend successfully",
         options: null,
