@@ -1,3 +1,4 @@
+const fileUploaderSvc = require("../../services/fileuploader.service");
 const generateReceipt = require("../../utilities/receipt");
 const generateStatement = require("../../utilities/statement");
 const accountSvc = require("../account/account.service");
@@ -37,8 +38,6 @@ class TransactionController {
       next(exception);
     }
   };
-
- 
 
   balanceTopUp = async (req, res, next) => {
     try {
@@ -99,7 +98,7 @@ class TransactionController {
 
       if (type === "week") {
         startDate = new Date();
-        startDate.setDate(now.getDate() - 6); // last 7 days
+        startDate.setDate(now.getDate() - 6);
       } else {
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
       }
@@ -116,7 +115,6 @@ class TransactionController {
 
       let result = [];
 
-      // ✅ WEEK (last 7 days EXACT, not weekday names)
       if (type === "week") {
         for (let i = 6; i >= 0; i--) {
           const date = new Date();
@@ -135,10 +133,7 @@ class TransactionController {
 
           result.push({ label, amount: total });
         }
-      }
-
-      // ✅ MONTH (correct number of days)
-      else {
+      } else {
         const daysInMonth = new Date(
           now.getFullYear(),
           now.getMonth() + 1,
@@ -442,18 +437,40 @@ class TransactionController {
           message: "Transaction not completed ",
         });
       }
-      const receipt = await generateReceipt(transaction);
-      if (!receipt || !receipt.url) {
-        return res.status(500).json({
-          message: "Receipt generation failed",
+      if (transaction?.receipt?.url) {
+        return res.json({
+          status: "SUCCESS",
+          data: {
+            receiptUrl: transaction.receipt.url,
+          },
         });
       }
+      const pdfBuffer = await generateReceipt(transaction);
+      const uploaded = await fileUploaderSvc.uploadBuffer(
+        pdfBuffer,
+        `receipt_${transaction._id}`,
+        "payu/receipts",
+      );
+
+      // transaction.receipt = {
+      //   url: uploaded.secure_url,
+      //   public_id: uploaded.public_id,
+      //   generatedAt: new Date(),
+      // };
+
+      // await transaction.save();
+
+      // if (!receipt || !receipt.url) {
+      //   return res.status(500).json({
+      //     message: "Receipt generation failed",
+      //   });
+      // }
 
       return res.json({
         status: "GENERATION_SUCCESS",
         data: {
           transaction,
-          receiptUrl: receipt.url,
+          receiptUrl: uploaded.secure_url,
         },
       });
     } catch (exception) {
@@ -492,79 +509,22 @@ class TransactionController {
           .json({ message: "No transactions found in this period" });
       }
 
-      const statement = await generateStatement(user, transactions, {
+      const pdfBuffer = await generateStatement(user, transactions, {
         start,
         end,
       });
+      const uploaded = await fileUploaderSvc.uploadBuffer(
+        pdfBuffer,
+        `transactions_${user._id}`,
+        "payu/statements",
+      );
 
       return res.json({
         status: "SUCCESS",
-        data: { statementUrl: statement.url },
+        data: { statementUrl: uploaded.url },
       });
     } catch (exception) {
       console.log(exception);
-    }
-  };
-
-  getBusRoutes = async (req, res, next) => {
-    try {
-      const response = await khaltiSvc.getRoutes();
-      return res.json({
-        status: "SUCCESS",
-        data: response,
-      });
-    } catch (exception) {
-      console.log(exception);
-      next(exception);
-    }
-  };
-
-  getBuses = async (req, res, next) => {
-    try {
-      const response = await khaltiSvc.fetchBuses(req.body);
-      return res.json({
-        status: "SUCCESS",
-        data: response,
-      });
-    } catch (exception) {
-      console.log(exception);
-    }
-  };
-  getSeats = async (req, res, next) => {
-    try {
-      const response = await khaltiSvc.getSeatInfo(req.body);
-      return res.json({
-        status: "SEATS",
-        data: response,
-      });
-    } catch (exception) {
-      console.log(exception);
-      next(exception);
-    }
-  };
-
-  zoodetails = async (req, res, next) => {
-    try {
-      const response = await khaltiSvc.zoodetails();
-      return res.json({
-        status: "ZOO",
-        data: response,
-      });
-    } catch (exception) {
-      next(exception);
-    }
-  };
-
-  antivirusDetails = async (req, res, next) => {
-    try {
-      const response = await khaltiSvc.fetchAntiDetails(req.body);
-      return res.json({
-        status: "ANTI_VIRUS",
-        data: response,
-      });
-    } catch (exception) {
-      console.log(exception);
-      next(exception);
     }
   };
 }

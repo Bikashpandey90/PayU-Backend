@@ -62,18 +62,5 @@ transactionRouter.get(
   transactionCtrl.getSpendingAnalytics,
 );
 
-transactionRouter.get("/bus-routes", transactionCtrl.getBusRoutes);
-transactionRouter.post("/buses", transactionCtrl.getBuses);
-transactionRouter.post("/seats", transactionCtrl.getSeats);
-
-transactionRouter.post(
-  "/topup",
-  checkLogin,
-  allowRole(["admin", "user"]),
-  transactionCtrl.balanceTopUp,
-);
-transactionRouter.get("/zoo", transactionCtrl.zoodetails);
-
-transactionRouter.post("/antivirus-details", transactionCtrl.antivirusDetails);
 
 module.exports = transactionRouter;

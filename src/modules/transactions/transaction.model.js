@@ -32,6 +32,11 @@ const transactionSchema = new mongoose.Schema(
       index: true,
       unique: true,
     },
+    receipt: {
+      url: String,
+      public_id: String,
+      generatedAt: Date,
+    },
     code: {
       type: String,
       enum: {
@@ -51,7 +56,7 @@ const transactionSchema = new mongoose.Schema(
           "SOCIAL_SECURITY_SERVICE",
           "GOVERNMENT_PAYMENT",
           "EMI_SERVICE",
-          "MEROSHARE_SERVICE"
+          "MEROSHARE_SERVICE",
         ],
       },
       required: true,
