@@ -6,7 +6,7 @@ const authSvc = require("../auth/auth.service");
 const khaltiSvc = require("../integration/khalti.service");
 const transactionSvc = require("./transaction.service");
 const crypto = require("crypto");
-
+// const smsService = require("../../services/sms.service");
 class TransactionController {
   createTransaction = async (req, res, next) => {
     try {
@@ -19,14 +19,23 @@ class TransactionController {
         idempotencyKey: data.idempotencyKey,
       });
 
-      await transactionSvc.sendTransactionEmail(
-        data.fromAccount.user.name,
-        data.amount,
-        data.fromAccount.user.email,
-        data.toAccount.user.name,
-        transaction._id,
-        data.toAccount.user.email,
-      );
+      try {
+        await transactionSvc.sendTransactionEmail(
+          data.fromAccount.user.name,
+          data.amount,
+          data.fromAccount.user.email,
+          data.toAccount.user.name,
+          transaction._id,
+          data.toAccount.user.email,
+        );
+      } catch (exception) {
+        console.log("Email sending failed", exception);
+      }
+      // try {
+      //   const message = await smsService.sendMessage();
+      // } catch (exception) {
+      //   console.log("SMS sending failed", exception);
+      // }
 
       return res.status(200).json({
         detail: transaction,
@@ -220,13 +229,16 @@ class TransactionController {
           purchase_order_id: transaction_uuid,
           purchase_order_name: "Wallet Load",
         });
-        await transactionSvc.createWalletTransaction({
+        console.log(khaltiResponse);
+        const check = await transactionSvc.createWalletTransaction({
           from: adminAccount,
           to: userAccount,
           amount,
-          idempotencyKey: transaction_uuid,
+          idempotencyKey: khaltiResponse.pidx,
           code: "KHALTI_LOAD",
+          provider_ref: khaltiResponse.pidx,
         });
+        console.log(check);
 
         return res.json({
           detail: {
@@ -286,6 +298,7 @@ class TransactionController {
       next(exception);
     }
   };
+
   detail = async (req, res, next) => {
     try {
       const id = req.params.id;
@@ -323,78 +336,118 @@ class TransactionController {
   };
   verify = async (req, res, next) => {
     try {
-      const { data } = req.body;
-      if (!data) {
-        return res.status(400).json({
-          message: "Missing fields",
+      const { data, pidx } = req.body;
+
+      if (data) {
+        const decoded = JSON.parse(Buffer.from(data, "base64").toString());
+        console.log("Decoded eSewa:", decoded);
+        const {
+          transaction_uuid,
+          total_amount,
+          status,
+          signature,
+          product_code,
+          signed_field_names,
+          transaction_code,
+        } = decoded;
+        const message = `transaction_code=${transaction_code},status=${status},total_amount=${total_amount},transaction_uuid=${transaction_uuid},product_code=${product_code},signed_field_names=${signed_field_names}`;
+
+        const expectedSignature = crypto
+          .createHmac("sha256", "8gBm/:&EnhH.1/q")
+          .update(message)
+          .digest("base64");
+
+        if (expectedSignature !== signature) {
+          return res.status(400).json({
+            message: "Invalid signature",
+          });
+        }
+        const txn = await transactionSvc.getSingleItemByFilter({
+          idempotencyKey: transaction_uuid,
         });
-      }
-      const decoded = JSON.parse(Buffer.from(data, "base64").toString());
 
-      console.log("Decoded eSewa:", decoded);
+        if (!txn) {
+          return res.status(404).json({
+            message: "Transaction not found",
+          });
+        }
+        if (txn.status === "COMPLETED") {
+          return res.json({
+            message: "Already verified",
+            detail: txn,
+          });
+        }
+        const url = `https://rc.esewa.com.np/api/epay/transaction/status/?product_code=EPAYTEST&total_amount=${total_amount}&transaction_uuid=${transaction_uuid}`;
+        const response = await fetch(url);
+        const JsonResponse = await response.json();
 
-      const {
-        transaction_uuid,
-        total_amount,
-        status,
-        signature,
-        product_code,
-        signed_field_names,
-        transaction_code,
-      } = decoded;
+        console.log("eSewa verify response:", JsonResponse);
 
-      const message = `transaction_code=${transaction_code},status=${status},total_amount=${total_amount},transaction_uuid=${transaction_uuid},product_code=${product_code},signed_field_names=${signed_field_names}`;
+        if (JsonResponse.status !== "COMPLETE") {
+          await transactionSvc.update(txn._id, {
+            status: JsonResponse.status,
+          });
 
-      const expectedSignature = crypto
-        .createHmac("sha256", "8gBm/:&EnhH.1/q")
-        .update(message)
-        .digest("base64");
-
-      if (expectedSignature !== signature) {
-        return res.status(400).json({
-          message: "Invalid signature",
+          return res.status(400).json({
+            detail: JsonResponse,
+            message: "Payment not completed",
+          });
+        }
+        const transaction = await transactionSvc.confirmWalletTransaction({
+          amount: total_amount,
+          idempotencyKey: transaction_uuid,
         });
-      }
-      const txn = await transactionSvc.getSingleItemByFilter({
-        idempotencyKey: transaction_uuid,
-      });
 
-      if (!txn) {
-        return res.status(404).json({
-          message: "Transaction not found",
-        });
-      }
-      if (txn.status === "COMPLETED") {
         return res.json({
-          message: "Already verified",
-          detail: txn,
+          message: "Wallet loaded successfully",
+          detail: transaction,
         });
       }
-      const url = `https://rc.esewa.com.np/api/epay/transaction/status/?product_code=EPAYTEST&total_amount=${total_amount}&transaction_uuid=${transaction_uuid}`;
-      const response = await fetch(url);
-      const JsonResponse = await response.json();
+      if (pidx) {
+        console.log("before verification", pidx);
+        const verification = await khaltiSvc.verifyPayment({ pidx });
+        console.log("Khalti verify response:", verification);
 
-      console.log("eSewa verify response:", JsonResponse);
+        if (verification.status !== "Completed") {
+          return res.status(400).json({
+            message: "Payment not completed",
+            detail: verification,
+          });
+        }
 
-      if (JsonResponse.status !== "COMPLETE") {
-        await transactionSvc.update(txn._id, {
-          status: JsonResponse.status,
+        const transaction_uuid = verification.pidx;
+
+        const txn = await transactionSvc.getSingleItemByFilter({
+          idempotencyKey: verification.pidx,
         });
 
-        return res.status(400).json({
-          detail: JsonResponse,
-          message: "Payment not completed",
+        if (!txn) {
+          return res.status(404).json({
+            message: "Transaction not found",
+          });
+        }
+
+        if (txn.status === "COMPLETED") {
+          return res.json({
+            message: "Already verified",
+            detail: txn,
+          });
+        }
+
+        const amount = Number(verification.total_amount) / 100;
+
+        const transaction = await transactionSvc.confirmWalletTransaction({
+          amount,
+          idempotencyKey: transaction_uuid,
+        });
+
+        return res.json({
+          message: "Wallet loaded successfully",
+          detail: transaction,
         });
       }
-
-      const transaction = await transactionSvc.confirmWalletTransaction({
-        amount: total_amount,
-        idempotencyKey: transaction_uuid,
-      });
-
-      return res.json({
-        message: "Wallet loaded successfully",
-        detail: transaction,
+      return res.status(400).json({
+        message: "Missing payment verification data",
       });
     } catch (exception) {
       console.log(exception);

@@ -59,4 +59,11 @@ authRouter.get(
   authCtrl.listUsers,
 );
 
+authRouter.get("/sup", (req, res, next) => {
+  console.log("Sup bitch ! The server is running .");
+  res.json({
+    message: "Sup bitch ! The server is running .",
+  });
+});
+
 module.exports = authRouter;

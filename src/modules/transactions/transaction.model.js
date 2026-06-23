@@ -32,6 +32,12 @@ const transactionSchema = new mongoose.Schema(
       index: true,
       unique: true,
     },
+    provider_ref: {
+      type: String,
+      required: false,
+      index: true,
+      unique: true,
+    },
     receipt: {
       url: String,
       public_id: String,

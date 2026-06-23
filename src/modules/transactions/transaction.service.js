@@ -496,6 +496,7 @@ class TransactionService {
     amount,
     idempotencyKey,
     code = "ESEWA_LOAD",
+    provider_ref,
   }) => {
     const session = await mongoose.startSession();
     let transaction;
@@ -511,6 +512,7 @@ class TransactionService {
             idempotencyKey,
             status: "PENDING",
             code: code,
+            provider_ref: provider_ref,
           },
         ],
         { session },

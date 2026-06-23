@@ -6,14 +6,19 @@ class KhaltiService {
     this.baseURL = process.env.KHALTI_SERVICE_URL;
     this.checkOutURL = process.env.KHALTI_CHECKOUT_URL;
     this.apiToken = process.env.KHALTI_SERVICE_TOKEN;
+    this.khaltiSecret = process.env.KHALTI_SECRET;
   }
 
-  async initiatePayment({ amount, purchase_order_id, purchase_order_name }) {
+  initiatePayment = async ({
+    amount,
+    purchase_order_id,
+    purchase_order_name,
+  }) => {
     try {
       const response = await axios.post(
         `${this.checkOutURL}/epayment/initiate/`,
         {
-          return_url: `${process.env.BACKEND_BASE_URL}/transaction/khalti/verify`,
+          return_url: `${process.env.FRONETEND_BASE_URL}/payment/success`,
           website_url: process.env.FRONETEND_BASE_URL,
           amount: amount * 100,
           purchase_order_id,
@@ -21,7 +26,7 @@ class KhaltiService {
         },
         {
           headers: {
-            Authorization: `Key ${this.apiToken}`,
+            Authorization: `Key ${this.khaltiSecret}`,
           },
         },
       );
@@ -31,21 +36,29 @@ class KhaltiService {
       console.log("Khalti initiate error:", error.response?.data);
       throw error;
     }
-  }
+  };
 
-  async verifyPayment(token, amount) {
-    const res = await axios.post(
-      `${process.env.KHALTI_CHECKOUT_URL}/payment/verify/`,
-      { token, amount },
-      {
-        headers: {
-          Authorization: "Key YOUR_SECRET_KEY",
+  verifyPayment = async ({ pidx }) => {
+    try {
+      console.log("Verifying Khalti payment with pidx:", pidx);
+      const res = await axios.post(
+        `${process.env.KHALTI_CHECKOUT_URL}/epayment/lookup/`,
+        { pidx },
+        {
+          headers: {
+            Authorization: `Key ${this.khaltiSecret}`,
+            "Content-Type": "application/json",
+          },
         },
-      },
-    );
+      );
+      console.log("Khalti verify response:", res.data);
 
-    return res.data;
-  }
+      return res.data;
+    } catch (error) {
+      console.log("Khalti initiate error:", error.response?.data);
+      throw error;
+    }
+  };
 
   getRoutes = async () => {
     try {

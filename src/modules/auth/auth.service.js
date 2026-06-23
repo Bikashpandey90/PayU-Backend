@@ -34,7 +34,7 @@ class AuthService {
   createUser = async (data) => {
     try {
       const userObj = new UserModel(data);
-      return await userObj.save(); 
+      return await userObj.save();
     } catch (exception) {
       console.log("Create user", exception);
       throw exception;
@@ -42,7 +42,8 @@ class AuthService {
   };
   sendActivationNotification = async (name, otp, email) => {
     try {
-      let msg = `<!DOCTYPE html>
+      let msg = `
+      <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
